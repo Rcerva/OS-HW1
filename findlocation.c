@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 typedef struct {
   char number[6];
@@ -74,11 +75,48 @@ int lookUpNumberHelper(void *ptr, size_t size, char* number){
   return lookUpNumber((entry_t *) ptr, n, number);
 }
 
+// Function to check if the file descriptor is seekable
+int isSeekable(int fd) {
+    off_t offset = lseek(fd, 0, SEEK_CUR);
+    return offset != -1;
+}
+
 int myMap(int fd, size_t *fileSize, char* number){
   off_t lseekRes;
   char *error;
   void *ptr;
+if (!isSeekable(fd)) {
+        // Handle unseekable file descriptor
+        write(1, "File descriptor is unseekable. Reading file contents...\n", 55);
+        entry_t *dict = NULL;
+        ssize_t bytes_read;
+        size_t capacity = 0;
 
+        // Read file into memory
+        while (1) {
+            if (*fileSize >= capacity) {
+                capacity += 1024; 
+                dict = realloc(dict, capacity * sizeof(entry_t));
+                if (dict == NULL) {
+                    perror("realloc");
+                    return 1;
+                }
+            }
+            bytes_read = read(fd, &dict[*fileSize], sizeof(entry_t));
+            if (bytes_read == -1) {
+                perror("read");
+                free(dict);
+                return 1;
+            }
+            if (bytes_read == 0) break; // End of file
+            (*fileSize)++;
+        }
+        // Perform lookup
+        int result = lookUpNumber(dict, *fileSize, number);
+        free(dict);
+        return result;
+    }
+  
   lseekRes = lseek(fd, ((off_t) 0), SEEK_END);
   if (lseekRes < ((off_t) 0)) {
     error = "Error: at using lseek on.\n";
